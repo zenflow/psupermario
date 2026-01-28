@@ -18,9 +18,9 @@ export const ENEMY_SPEED = 50;
 export const MUSHROOM_SPEED = 60;
 
 export const DAMAGE_COOLDOWN_MS = 1200;
-export const TRIP_SCALE_STEP = 0.12;
-export const TRIP_WOBBLE_FACTOR = 0.002;
-export const TRIP_ZOOM_FACTOR = 0.012;
+export const TRIP_SCALE_STEP = 0.15;
+export const TRIP_WOBBLE_FACTOR = 0.008;
+export const TRIP_ZOOM_FACTOR = 0.024;
 
 export enum BlockType {
   Regular = 'regular',
