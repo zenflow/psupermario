@@ -44,6 +44,8 @@ export class World1Scene extends Phaser.Scene {
   private mushrooms!: Phaser.Physics.Arcade.Group;
   private tripState!: TripState;
   private tripText!: Phaser.GameObjects.Text;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  private uiLayer!: Phaser.GameObjects.Layer;
   private isCrouching = false;
   private jumpsUsed = 0;
   private wasOnGround = false;
@@ -103,12 +105,12 @@ export class World1Scene extends Phaser.Scene {
       );
     });
 
-    this.tripText = this.add.text(16, 16, '', {
+    this.setupHud();
+    this.tripText = this.addHudText(16, 16, '', {
       fontFamily: 'Trebuchet MS',
       fontSize: '18px',
       color: '#f5f3ff',
     });
-    this.tripText.setScrollFactor(0);
     this.updateTripUI();
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -456,6 +458,45 @@ export class World1Scene extends Phaser.Scene {
     mushroom.setCollideWorldBounds(true);
     mushroom.setVelocityX(MUSHROOM_SPEED);
     mushroom.setSize(MUSHROOM_SIZE, MUSHROOM_SIZE);
+    this.registerWorldObject(mushroom);
+  }
+
+  private setupHud(): void {
+    this.uiLayer = this.add.layer();
+    this.uiLayer.setDepth(100);
+    this.cameras.main.ignore(this.uiLayer);
+
+    this.uiCamera = this.cameras.add(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    this.uiCamera.setScroll(0, 0);
+    this.refreshUiCameraMask();
+  }
+
+  private refreshUiCameraMask(): void {
+    const uiObjects = new Set(this.uiLayer.list);
+    const uiLayerObject = this.uiLayer as unknown as Phaser.GameObjects.GameObject;
+    const ignoreList = this.children.list.filter(
+      (child) => child !== uiLayerObject && !uiObjects.has(child),
+    );
+    this.uiCamera.ignore(ignoreList);
+  }
+
+  private addHudText(
+    x: number,
+    y: number,
+    text: string,
+    style: Phaser.Types.GameObjects.Text.TextStyle,
+  ): Phaser.GameObjects.Text {
+    const label = this.add.text(x, y, text, style);
+    label.setScrollFactor(0);
+    this.uiLayer.add(label);
+    this.refreshUiCameraMask();
+    return label;
+  }
+
+  private registerWorldObject(object: Phaser.GameObjects.GameObject): void {
+    if (this.uiCamera) {
+      this.uiCamera.ignore(object);
+    }
   }
 
   private tweenBlock(block: Phaser.Physics.Arcade.Image): void {
