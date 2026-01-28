@@ -89,6 +89,7 @@ export class World1Scene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.blocks, (enemyObj) => {
       this.handleEnemyBlockCollision(enemyObj as Phaser.Physics.Arcade.Sprite);
     });
+    this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.player, this.mushrooms, (playerObj, itemObj) => {
       this.handlePlayerMushroom(
         playerObj as Phaser.Physics.Arcade.Sprite,
@@ -148,6 +149,7 @@ export class World1Scene extends Phaser.Scene {
     this.wasOnGround = onGround;
 
     this.applyTripVisuals(time);
+    this.updateEnemyChase();
 
     if (this.player.y > WORLD_HEIGHT + 200) {
       this.triggerGameOver('You slipped past the world edge.');
@@ -383,10 +385,26 @@ export class World1Scene extends Phaser.Scene {
   }
 
   private handleEnemyBlockCollision(enemy: Phaser.Physics.Arcade.Sprite): void {
-    const body = enemy.body as Phaser.Physics.Arcade.Body;
-    if (body.blocked.left || body.blocked.right) {
-      enemy.setVelocityX(-body.velocity.x || ENEMY_SPEED);
+    this.setEnemyVelocityTowardPlayer(enemy);
+  }
+
+  private updateEnemyChase(): void {
+    this.enemies.children.iterate((enemy) => {
+      if (!enemy || !enemy.active) {
+        return null;
+      }
+      this.setEnemyVelocityTowardPlayer(enemy as Phaser.Physics.Arcade.Sprite);
+      return null;
+    });
+  }
+
+  private setEnemyVelocityTowardPlayer(enemy: Phaser.Physics.Arcade.Sprite): void {
+    const direction = Math.sign(this.player.x - enemy.x);
+    if (direction === 0) {
+      enemy.setVelocityX(0);
+      return;
     }
+    enemy.setVelocityX(ENEMY_SPEED * direction);
   }
 
   private handlePlayerMushroom(

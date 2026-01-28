@@ -40,6 +40,7 @@
 - Powerup blocks emit mushrooms when bumped from underneath.
 - Smashable blocks are destroyed when bumped from underneath.
 - Enemies include Koopas and Goombas (animated obstacles).
+- Enemies always move toward the player and collide with each other.
 - Picking up a mushroom increases trip level by +1.
 - Taking damage decreases trip level by -1.
 - Trip level starts at 0. Going below 0 triggers game over.
