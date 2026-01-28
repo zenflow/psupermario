@@ -17,6 +17,7 @@ import {
   SCREEN_WIDTH,
   TILE_SIZE,
   TRIP_SCALE_STEP,
+  TRIP_SPEED_STEP,
   TRIP_WOBBLE_FACTOR,
   TRIP_ZOOM_FACTOR,
   WORLD_HEIGHT,
@@ -119,14 +120,17 @@ export class World1Scene extends Phaser.Scene {
   public update(time: number): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down;
-    const maxExtraJumps = Math.max(0, this.tripState.level);
+    const tripLevel = Math.max(0, this.tripState.level);
+    const maxExtraJumps = tripLevel;
 
     if (onGround && !this.wasOnGround) {
       this.jumpsUsed = 0;
     }
 
     this.isCrouching = this.cursors.down?.isDown === true && onGround;
-    const moveSpeed = this.isCrouching ? PLAYER_SPEED * 0.35 : PLAYER_SPEED;
+    const speedScale = 1 + tripLevel * TRIP_SPEED_STEP;
+    const baseSpeed = PLAYER_SPEED * speedScale;
+    const moveSpeed = this.isCrouching ? baseSpeed * 0.35 : baseSpeed;
 
     if (!this.isCrouching && this.cursors.left?.isDown) {
       this.player.setVelocityX(-moveSpeed);

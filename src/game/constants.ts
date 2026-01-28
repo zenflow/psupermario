@@ -21,6 +21,7 @@ export const DAMAGE_COOLDOWN_MS = 1200;
 export const TRIP_SCALE_STEP = 0.15;
 export const TRIP_WOBBLE_FACTOR = 0.008;
 export const TRIP_ZOOM_FACTOR = 0.024;
+export const TRIP_SPEED_STEP = 0.12;
 
 export enum BlockType {
   Regular = 'regular',
