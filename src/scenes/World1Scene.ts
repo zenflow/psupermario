@@ -1,0 +1,453 @@
+import * as Phaser from 'phaser';
+
+import {
+  BlockType,
+  DAMAGE_COOLDOWN_MS,
+  ENEMY_SIZE,
+  ENEMY_SPEED,
+  EnemyType,
+  MUSHROOM_SIZE,
+  MUSHROOM_SPEED,
+  PLAYER_BOUNCE_VELOCITY,
+  PLAYER_HEIGHT,
+  PLAYER_JUMP_VELOCITY,
+  PLAYER_SPEED,
+  PLAYER_WIDTH,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+  TILE_SIZE,
+  TRIP_SCALE_STEP,
+  TRIP_WOBBLE_FACTOR,
+  TRIP_ZOOM_FACTOR,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from '../game/constants';
+import {
+  applyDamage,
+  applyMushroom,
+  canTakeDamage,
+  createTripState,
+  type TripState,
+} from '../game/state';
+
+type BlockData = {
+  type: BlockType;
+  used?: boolean;
+};
+
+export class World1Scene extends Phaser.Scene {
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private player!: Phaser.Physics.Arcade.Sprite;
+  private blocks!: Phaser.Physics.Arcade.StaticGroup;
+  private enemies!: Phaser.Physics.Arcade.Group;
+  private mushrooms!: Phaser.Physics.Arcade.Group;
+  private tripState!: TripState;
+  private tripText!: Phaser.GameObjects.Text;
+  private isCrouching = false;
+
+  public constructor() {
+    super('World1Scene');
+  }
+
+  public create(): void {
+    this.addBackground();
+    this.createPlaceholderTextures();
+
+    const keyboard = this.input.keyboard;
+    if (!keyboard) {
+      throw new Error('Keyboard input is required but unavailable.');
+    }
+    this.cursors = keyboard.createCursorKeys();
+    this.tripState = createTripState(this.time.now);
+
+    this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    this.blocks = this.physics.add.staticGroup();
+    this.buildLevel();
+
+    this.player = this.physics.add.sprite(160, 320, 'player');
+    this.player.setCollideWorldBounds(true);
+    this.player.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
+    this.player.setOffset(3, 2);
+    this.player.setDepth(2);
+
+    this.enemies = this.physics.add.group({ allowGravity: true });
+    this.mushrooms = this.physics.add.group({ allowGravity: true });
+    this.spawnEnemies();
+
+    this.physics.add.collider(this.player, this.blocks, (playerObj, blockObj) => {
+      this.handlePlayerBlockCollision(
+        playerObj as Phaser.Physics.Arcade.Sprite,
+        blockObj as Phaser.Physics.Arcade.Image,
+      );
+    });
+    this.physics.add.collider(this.mushrooms, this.blocks);
+    this.physics.add.collider(this.enemies, this.blocks, (enemyObj) => {
+      this.handleEnemyBlockCollision(enemyObj as Phaser.Physics.Arcade.Sprite);
+    });
+    this.physics.add.overlap(this.player, this.mushrooms, (playerObj, itemObj) => {
+      this.handlePlayerMushroom(
+        playerObj as Phaser.Physics.Arcade.Sprite,
+        itemObj as Phaser.Physics.Arcade.Sprite,
+      );
+    });
+    this.physics.add.overlap(this.player, this.enemies, (playerObj, enemyObj) => {
+      this.handlePlayerEnemy(
+        playerObj as Phaser.Physics.Arcade.Sprite,
+        enemyObj as Phaser.Physics.Arcade.Sprite,
+      );
+    });
+
+    this.tripText = this.add.text(16, 16, '', {
+      fontFamily: 'Trebuchet MS',
+      fontSize: '18px',
+      color: '#f5f3ff',
+    });
+    this.tripText.setScrollFactor(0);
+    this.updateTripUI();
+
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+  }
+
+  public update(time: number): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const onGround = body.blocked.down;
+
+    this.isCrouching = this.cursors.down?.isDown === true && onGround;
+    const moveSpeed = this.isCrouching ? PLAYER_SPEED * 0.35 : PLAYER_SPEED;
+
+    if (!this.isCrouching && this.cursors.left?.isDown) {
+      this.player.setVelocityX(-moveSpeed);
+      this.player.setFlipX(true);
+    } else if (!this.isCrouching && this.cursors.right?.isDown) {
+      this.player.setVelocityX(moveSpeed);
+      this.player.setFlipX(false);
+    } else {
+      this.player.setVelocityX(0);
+    }
+
+    if (this.cursors.up && Phaser.Input.Keyboard.JustDown(this.cursors.up) && onGround) {
+      this.player.setVelocityY(PLAYER_JUMP_VELOCITY);
+    }
+
+    this.applyTripVisuals(time);
+
+    if (this.player.y > WORLD_HEIGHT + 200) {
+      this.triggerGameOver('You slipped past the world edge.');
+    }
+  }
+
+  private addBackground(): void {
+    const gradient = this.add.graphics();
+    gradient.fillGradientStyle(0x120d1d, 0x191b35, 0x1c1330, 0x0b0a16, 1);
+    gradient.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    gradient.setScrollFactor(0);
+
+    const halo = this.add.graphics();
+    halo.fillStyle(0x2e5e90, 0.25);
+    halo.fillCircle(220, 120, 180);
+    halo.fillStyle(0x6a2c52, 0.2);
+    halo.fillCircle(720, 80, 200);
+    halo.setScrollFactor(0);
+  }
+
+  private createPlaceholderTextures(): void {
+    if (this.textures.exists('player')) {
+      return;
+    }
+
+    const block = this.add.graphics();
+    block.fillStyle(0x3f3848, 1);
+    block.fillRoundedRect(0, 0, TILE_SIZE, TILE_SIZE, 4);
+    block.generateTexture('block', TILE_SIZE, TILE_SIZE);
+    block.clear();
+
+    block.fillStyle(0x7c5b2a, 1);
+    block.fillRoundedRect(0, 0, TILE_SIZE, TILE_SIZE, 4);
+    block.lineStyle(2, 0xf2d27a, 1);
+    block.strokeRoundedRect(4, 4, TILE_SIZE - 8, TILE_SIZE - 8, 3);
+    block.generateTexture('block-power', TILE_SIZE, TILE_SIZE);
+    block.clear();
+
+    block.fillStyle(0x6b324a, 1);
+    block.fillRoundedRect(0, 0, TILE_SIZE, TILE_SIZE, 4);
+    block.lineStyle(2, 0xe18cab, 1);
+    block.strokeRoundedRect(4, 4, TILE_SIZE - 8, TILE_SIZE - 8, 3);
+    block.generateTexture('block-smash', TILE_SIZE, TILE_SIZE);
+    block.destroy();
+
+    const player = this.add.graphics();
+    player.fillStyle(0x6de1ff, 1);
+    player.fillRoundedRect(0, 0, PLAYER_WIDTH, PLAYER_HEIGHT, 6);
+    player.fillStyle(0x1b1b2a, 1);
+    player.fillRect(5, 8, 6, 6);
+    player.fillRect(PLAYER_WIDTH - 11, 8, 6, 6);
+    player.generateTexture('player', PLAYER_WIDTH, PLAYER_HEIGHT);
+    player.destroy();
+
+    const goomba = this.add.graphics();
+    goomba.fillStyle(0xd77a3d, 1);
+    goomba.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
+    goomba.fillStyle(0x2f2018, 1);
+    goomba.fillRect(6, 8, 6, 6);
+    goomba.fillRect(ENEMY_SIZE - 12, 8, 6, 6);
+    goomba.generateTexture('goomba-1', ENEMY_SIZE, ENEMY_SIZE);
+    goomba.clear();
+    goomba.fillStyle(0xe0a56a, 1);
+    goomba.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
+    goomba.fillStyle(0x2f2018, 1);
+    goomba.fillRect(6, 10, 6, 6);
+    goomba.fillRect(ENEMY_SIZE - 12, 10, 6, 6);
+    goomba.generateTexture('goomba-2', ENEMY_SIZE, ENEMY_SIZE);
+    goomba.destroy();
+
+    const koopa = this.add.graphics();
+    koopa.fillStyle(0x3dbf75, 1);
+    koopa.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
+    koopa.fillStyle(0x163823, 1);
+    koopa.fillRect(6, 8, 6, 6);
+    koopa.fillRect(ENEMY_SIZE - 12, 8, 6, 6);
+    koopa.generateTexture('koopa-1', ENEMY_SIZE, ENEMY_SIZE);
+    koopa.clear();
+    koopa.fillStyle(0x54e697, 1);
+    koopa.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
+    koopa.fillStyle(0x163823, 1);
+    koopa.fillRect(6, 10, 6, 6);
+    koopa.fillRect(ENEMY_SIZE - 12, 10, 6, 6);
+    koopa.generateTexture('koopa-2', ENEMY_SIZE, ENEMY_SIZE);
+    koopa.destroy();
+
+    const mushroom = this.add.graphics();
+    mushroom.fillStyle(0xf75a6f, 1);
+    mushroom.fillRoundedRect(0, 0, MUSHROOM_SIZE, MUSHROOM_SIZE, 6);
+    mushroom.fillStyle(0xfff1f4, 1);
+    mushroom.fillCircle(6, 6, 4);
+    mushroom.fillCircle(14, 8, 4);
+    mushroom.generateTexture('mushroom', MUSHROOM_SIZE, MUSHROOM_SIZE);
+    mushroom.destroy();
+  }
+
+  private buildLevel(): void {
+    const groundY = WORLD_HEIGHT - TILE_SIZE / 2;
+    for (let x = 0; x <= WORLD_WIDTH; x += TILE_SIZE) {
+      this.placeBlock(x + TILE_SIZE / 2, groundY, BlockType.Regular);
+    }
+
+    const platforms: Array<{ x: number; y: number; count: number }> = [
+      { x: 360, y: 380, count: 5 },
+      { x: 820, y: 320, count: 4 },
+      { x: 1160, y: 260, count: 4 },
+      { x: 1560, y: 360, count: 6 },
+      { x: 2100, y: 300, count: 5 },
+    ];
+
+    platforms.forEach((platform, index) => {
+      for (let i = 0; i < platform.count; i += 1) {
+        const blockType = index % 2 === 0 ? BlockType.Powerup : BlockType.Regular;
+        this.placeBlock(
+          platform.x + i * TILE_SIZE,
+          platform.y,
+          i === 2 ? BlockType.Powerup : blockType,
+        );
+      }
+    });
+
+    this.placeBlock(560, 320, BlockType.Smashable);
+    this.placeBlock(592, 320, BlockType.Smashable);
+    this.placeBlock(624, 320, BlockType.Smashable);
+    this.placeBlock(1880, 320, BlockType.Smashable);
+
+    this.placeBlock(2450, 420, BlockType.Powerup);
+    this.placeBlock(2482, 420, BlockType.Regular);
+    this.placeBlock(2514, 420, BlockType.Powerup);
+  }
+
+  private placeBlock(x: number, y: number, type: BlockType): void {
+    const textureKey = this.blockTextureForType(type);
+    const block = this.blocks.create(x, y, textureKey) as Phaser.Physics.Arcade.Image;
+    block.setData('block', { type } satisfies BlockData);
+    block.setDepth(1);
+  }
+
+  private blockTextureForType(type: BlockType): string {
+    switch (type) {
+      case BlockType.Powerup:
+        return 'block-power';
+      case BlockType.Smashable:
+        return 'block-smash';
+      case BlockType.Regular:
+      default:
+        return 'block';
+    }
+  }
+
+  private spawnEnemies(): void {
+    if (!this.anims.exists('goomba-walk')) {
+      this.anims.create({
+        key: 'goomba-walk',
+        frames: [{ key: 'goomba-1' }, { key: 'goomba-2' }],
+        frameRate: 4,
+        repeat: -1,
+      });
+    }
+    if (!this.anims.exists('koopa-walk')) {
+      this.anims.create({
+        key: 'koopa-walk',
+        frames: [{ key: 'koopa-1' }, { key: 'koopa-2' }],
+        frameRate: 4,
+        repeat: -1,
+      });
+    }
+
+    const positions: Array<{ x: number; y: number; type: EnemyType; dir: number }> = [
+      { x: 520, y: 420, type: EnemyType.Goomba, dir: -1 },
+      { x: 980, y: 420, type: EnemyType.Koopa, dir: 1 },
+      { x: 1460, y: 420, type: EnemyType.Goomba, dir: 1 },
+      { x: 1960, y: 420, type: EnemyType.Koopa, dir: -1 },
+      { x: 2300, y: 420, type: EnemyType.Goomba, dir: -1 },
+    ];
+
+    positions.forEach((enemyData) => {
+      const enemy = this.enemies.create(enemyData.x, enemyData.y, `${enemyData.type}-1`) as
+        | Phaser.Physics.Arcade.Sprite
+        | undefined;
+      if (!enemy) {
+        return;
+      }
+      enemy.setData('type', enemyData.type);
+      enemy.setCollideWorldBounds(true);
+      enemy.setBounce(1, 0);
+      enemy.setVelocityX(ENEMY_SPEED * enemyData.dir);
+      enemy.setSize(ENEMY_SIZE, ENEMY_SIZE);
+      enemy.play(`${enemyData.type}-walk`);
+    });
+  }
+
+  private handlePlayerBlockCollision(
+    player: Phaser.Physics.Arcade.Sprite,
+    block: Phaser.Physics.Arcade.Image,
+  ): void {
+    const playerBody = player.body as Phaser.Physics.Arcade.Body;
+    const blockBody = block.body as Phaser.Physics.Arcade.StaticBody;
+    const blockData = block.getData('block') as BlockData | undefined;
+
+    if (!blockData) {
+      return;
+    }
+
+    if (playerBody.touching.up && blockBody.touching.down) {
+      if (blockData.type === BlockType.Powerup && !blockData.used) {
+        blockData.used = true;
+        block.setData('block', blockData);
+        block.setTexture('block');
+        this.spawnMushroom(block.x, block.y - TILE_SIZE);
+      }
+
+      if (blockData.type === BlockType.Smashable) {
+        block.destroy();
+      }
+
+      player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
+      this.tweenBlock(block);
+    }
+  }
+
+  private handleEnemyBlockCollision(enemy: Phaser.Physics.Arcade.Sprite): void {
+    const body = enemy.body as Phaser.Physics.Arcade.Body;
+    if (body.blocked.left || body.blocked.right) {
+      enemy.setVelocityX(-body.velocity.x || ENEMY_SPEED);
+    }
+  }
+
+  private handlePlayerMushroom(
+    player: Phaser.Physics.Arcade.Sprite,
+    mushroom: Phaser.Physics.Arcade.Sprite,
+  ): void {
+    mushroom.destroy();
+    this.tripState = applyMushroom(this.tripState);
+    this.updateTripUI();
+    this.flashPlayer(player, 0x96ffda);
+  }
+
+  private handlePlayerEnemy(
+    player: Phaser.Physics.Arcade.Sprite,
+    enemy: Phaser.Physics.Arcade.Sprite,
+  ): void {
+    const playerBody = player.body as Phaser.Physics.Arcade.Body;
+    const enemyBody = enemy.body as Phaser.Physics.Arcade.Body;
+    const stomp = playerBody.velocity.y > 80 && playerBody.touching.down && enemyBody.touching.up;
+
+    if (stomp) {
+      enemy.destroy();
+      player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
+      this.flashPlayer(player, 0xfff6b0);
+      return;
+    }
+
+    if (!canTakeDamage(this.tripState, this.time.now)) {
+      return;
+    }
+
+    this.tripState = applyDamage(this.tripState, this.time.now);
+    this.updateTripUI();
+
+    const knockback = player.x < enemy.x ? -160 : 160;
+    player.setVelocity(knockback, -200);
+    this.flashPlayer(player, 0xff8aa5);
+
+    if (this.tripState.level < 0) {
+      this.triggerGameOver('Trip level dropped below zero.');
+    }
+  }
+
+  private spawnMushroom(x: number, y: number): void {
+    const mushroom = this.mushrooms.create(x, y, 'mushroom') as Phaser.Physics.Arcade.Sprite;
+    mushroom.setBounce(1, 0);
+    mushroom.setCollideWorldBounds(true);
+    mushroom.setVelocityX(MUSHROOM_SPEED);
+    mushroom.setSize(MUSHROOM_SIZE, MUSHROOM_SIZE);
+  }
+
+  private tweenBlock(block: Phaser.Physics.Arcade.Image): void {
+    this.tweens.add({
+      targets: block,
+      y: block.y - 8,
+      duration: 80,
+      yoyo: true,
+    });
+  }
+
+  private applyTripVisuals(time: number): void {
+    const level = Math.max(0, this.tripState.level);
+    const scale = 1 + level * TRIP_SCALE_STEP;
+    this.player.setScale(scale);
+
+    const camera = this.cameras.main;
+    const wobble = Math.sin(time / 240) * TRIP_WOBBLE_FACTOR * level;
+    const zoomPulse = Math.sin(time / 360) * TRIP_ZOOM_FACTOR * level;
+    camera.setRotation(wobble);
+    camera.setZoom(1 + level * TRIP_ZOOM_FACTOR + zoomPulse);
+
+    const invuln = this.time.now - this.tripState.lastDamageAt < DAMAGE_COOLDOWN_MS;
+    if (invuln) {
+      const flicker = Math.sin(time / 80) > 0 ? 0.6 : 1;
+      this.player.setAlpha(flicker);
+    } else {
+      this.player.setAlpha(1);
+    }
+  }
+
+  private updateTripUI(): void {
+    this.tripText.setText(`Trip Level: ${this.tripState.level}`);
+  }
+
+  private flashPlayer(player: Phaser.Physics.Arcade.Sprite, tint: number): void {
+    player.setTint(tint);
+    this.time.delayedCall(180, () => player.clearTint());
+  }
+
+  private triggerGameOver(reason: string): void {
+    this.scene.start('GameOverScene', { reason });
+  }
+}

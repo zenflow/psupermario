@@ -13,15 +13,16 @@
 - Start with one well designed world level and leave room for more.
 
 ## Current repo status
-- This repo currently contains only `AGENTS.md` and `opencode.json`.
-- No build, lint, or test tooling exists yet.
+- Vite + TypeScript + Phaser scaffold is in place.
+- ESLint is used for linting.
+- Vitest is used for tests.
 - If you add tooling, update this file with the exact commands.
-- Vite is to be used for builds.
-- Eslint is to be used for linting.
-- Vitest is to be used for tests.
 
 ### Build
--`npm run build` runs Vite for builds
+- `npm run build` runs Vite for builds.
+
+### Dev
+- `npm run dev` starts the Vite dev server.
 
 ### Lint
 - `npm run lint` runs eslint and tsc
