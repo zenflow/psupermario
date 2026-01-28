@@ -45,6 +45,8 @@ export class World1Scene extends Phaser.Scene {
   private tripState!: TripState;
   private tripText!: Phaser.GameObjects.Text;
   private isCrouching = false;
+  private jumpsUsed = 0;
+  private wasOnGround = false;
 
   public constructor() {
     super('World1Scene');
@@ -114,6 +116,11 @@ export class World1Scene extends Phaser.Scene {
   public update(time: number): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down;
+    const maxExtraJumps = Math.max(0, this.tripState.level);
+
+    if (onGround && !this.wasOnGround) {
+      this.jumpsUsed = 0;
+    }
 
     this.isCrouching = this.cursors.down?.isDown === true && onGround;
     const moveSpeed = this.isCrouching ? PLAYER_SPEED * 0.35 : PLAYER_SPEED;
@@ -128,9 +135,17 @@ export class World1Scene extends Phaser.Scene {
       this.player.setVelocityX(0);
     }
 
-    if (this.cursors.up && Phaser.Input.Keyboard.JustDown(this.cursors.up) && onGround) {
+    const canMidAirJump = !onGround && this.jumpsUsed > 0 && this.jumpsUsed <= maxExtraJumps;
+    if (
+      this.cursors.up &&
+      Phaser.Input.Keyboard.JustDown(this.cursors.up) &&
+      (onGround || canMidAirJump)
+    ) {
       this.player.setVelocityY(PLAYER_JUMP_VELOCITY);
+      this.jumpsUsed += 1;
     }
+
+    this.wasOnGround = onGround;
 
     this.applyTripVisuals(time);
 

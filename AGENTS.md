@@ -44,6 +44,7 @@
 - Taking damage decreases trip level by -1.
 - Trip level starts at 0. Going below 0 triggers game over.
 - Each trip level increases player size and adds a psychedelic distortion.
+- Each trip level grants one extra mid-air jump (trip level 1 = double-jump, trip level 2 = triple-jump, etc.).
 
 ## Design goals
 - One complete world level with clear boundaries and room for expansion.
