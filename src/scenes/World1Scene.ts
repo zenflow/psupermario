@@ -355,7 +355,9 @@ export class World1Scene extends Phaser.Scene {
     }
 
     const isHeadHit =
-      playerBody.touching.up && blockBody.touching.down && !playerBody.wasTouching.up;
+      playerBody.touching.up &&
+      blockBody.touching.down &&
+      playerBody.deltaY() < 0;
     if (!isHeadHit) {
       return;
     }
