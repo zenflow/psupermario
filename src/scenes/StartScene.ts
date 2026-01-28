@@ -23,13 +23,10 @@ export class StartScene extends Phaser.Scene {
       'Smash cracked blocks from below',
       'Avoid enemies or stomp them',
       '',
-      'Run: npm install',
-      'Start: npm run dev',
-      '',
-      'Press SPACE to begin',
+      'Press Enter to begin',
     ];
 
-    const body = this.add.text(SCREEN_WIDTH / 2, 260, instructions, {
+    const body = this.add.text(SCREEN_WIDTH / 2, 300, instructions, {
       fontFamily: 'Trebuchet MS',
       fontSize: '20px',
       color: '#d8d1ff',
@@ -38,21 +35,11 @@ export class StartScene extends Phaser.Scene {
     });
     body.setOrigin(0.5, 0.5);
 
-    const hint = this.add.text(SCREEN_WIDTH / 2, 440, 'Space or Enter', {
-      fontFamily: 'Trebuchet MS',
-      fontSize: '18px',
-      color: '#8cf6ff',
-    });
-    hint.setOrigin(0.5, 0.5);
-
     const keyboard = this.input.keyboard;
     if (!keyboard) {
       return;
     }
 
-    keyboard.once('keydown-SPACE', () => {
-      this.scene.start('World1Scene');
-    });
     keyboard.once('keydown-ENTER', () => {
       this.scene.start('World1Scene');
     });

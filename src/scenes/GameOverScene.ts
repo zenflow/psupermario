@@ -30,7 +30,7 @@ export class GameOverScene extends Phaser.Scene {
     });
     body.setOrigin(0.5, 0.5);
 
-    const hint = this.add.text(SCREEN_WIDTH / 2, 360, 'Press SPACE to restart', {
+    const hint = this.add.text(SCREEN_WIDTH / 2, 360, 'Press Enter to restart', {
       fontFamily: 'Trebuchet MS',
       fontSize: '18px',
       color: '#8cf6ff',
@@ -42,7 +42,7 @@ export class GameOverScene extends Phaser.Scene {
       return;
     }
 
-    keyboard.once('keydown-SPACE', () => {
+    keyboard.once('keydown-ENTER', () => {
       this.scene.start('World1Scene');
     });
   }
