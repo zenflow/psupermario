@@ -33,6 +33,7 @@ import {
 type BlockData = {
   type: BlockType;
   used?: boolean;
+  lastHitAt?: number;
 };
 
 export class World1Scene extends Phaser.Scene {
@@ -336,21 +337,34 @@ export class World1Scene extends Phaser.Scene {
       return;
     }
 
-    if (playerBody.touching.up && blockBody.touching.down) {
-      if (blockData.type === BlockType.Powerup && !blockData.used) {
-        blockData.used = true;
-        block.setData('block', blockData);
-        block.setTexture('block');
-        this.spawnMushroom(block.x, block.y - TILE_SIZE);
-      }
-
-      if (blockData.type === BlockType.Smashable) {
-        block.destroy();
-      }
-
-      player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
-      this.tweenBlock(block);
+    const isHeadHit =
+      playerBody.touching.up && blockBody.touching.down && !playerBody.wasTouching.up;
+    if (!isHeadHit) {
+      return;
     }
+
+    const now = this.time.now;
+    if (blockData.lastHitAt !== undefined && now - blockData.lastHitAt < 140) {
+      return;
+    }
+    blockData.lastHitAt = now;
+
+    if (blockData.type === BlockType.Powerup && !blockData.used) {
+      blockData.used = true;
+      block.setTexture('block');
+      this.spawnMushroom(block.x, block.y - TILE_SIZE);
+    }
+
+    player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
+
+    if (blockData.type === BlockType.Smashable) {
+      block.setData('block', blockData);
+      block.disableBody(true, true);
+      return;
+    }
+
+    block.setData('block', blockData);
+    this.tweenBlock(block);
   }
 
   private handleEnemyBlockCollision(enemy: Phaser.Physics.Arcade.Sprite): void {
