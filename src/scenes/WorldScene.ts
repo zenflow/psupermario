@@ -499,12 +499,9 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private applyTripVisuals(time: number): void {
-    const tripScaleStep = 0.15;
     const tripWobbleFactor = 0.008;
     const tripZoomFactor = 0.024;
     const level = Math.max(0, this.tripState.level);
-    const scale = 1 + level * tripScaleStep;
-    this.player.setScale(scale);
 
     const camera = this.cameras.main;
     const wobble = Math.sin(time / 240) * tripWobbleFactor * level;
