@@ -15,20 +15,29 @@
 ## Current repo status
 - Vite + TypeScript + Phaser scaffold is in place.
 - ESLint is used for linting.
+- ESLint Watch is used for lint watch mode.
 - Vitest is used for tests.
+- Concurrently is used to run multi-process dev scripts.
 - If you add tooling, update this file with the exact commands.
 
 ### Build
 - `npm run build` runs Vite for builds.
 
 ### Dev
-- `npm run dev` starts the Vite dev server.
+- `npm run dev` starts the dev server plus lint, typecheck, and test watch.
+- `npm run dev:server` starts only the Vite dev server.
 
 ### Lint
-- `npm run lint` runs eslint and tsc
+- `npm run lint` runs eslint once.
+- `npm run lint:watch` runs eslint in watch mode.
+
+### Typecheck
+- `npm run typecheck` runs tsc without emit.
+- `npm run typecheck:watch` runs tsc in watch mode.
 
 ### Test
-- `npm run test` runs Vitest in run mode
+- `npm run test` runs Vitest in run mode.
+- `npm run test:watch` runs Vitest in watch mode.
 
 ### Run a single test
 - Vitest: `npx vitest run path/to/file.test.ts`.

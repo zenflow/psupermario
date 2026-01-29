@@ -4,11 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n server,lint,types,test --prefix \"[{time}][{name}]\" --timestamp-format \"HH:mm:ss\" --prefix-colors blue,magenta,cyan,green \"npm:dev:server\" \"npm:lint:watch\" \"npm:typecheck:watch\" \"npm:test:watch\"",
+    "dev:server": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext .ts --report-unused-disable-directives --max-warnings=0 && tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "lint": "eslint src tests --ext .ts --report-unused-disable-directives --max-warnings=0",
+    "lint:watch": "esw -w --ext .ts --report-unused-disable-directives --max-warnings=0 --no-color src tests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:watch": "tsc -p tsconfig.json --noEmit --watch --pretty false --preserveWatchOutput",
+    "test": "vitest run",
+    "test:watch": "vitest --watch --reporter dot --no-color --clearScreen false"
   },
   "dependencies": {
     "phaser": "^3.80.1"
@@ -17,7 +22,9 @@
     "@types/node": "^22.10.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^9.1.0",
     "eslint": "^8.57.0",
+    "eslint-watch": "^8.0.0",
     "eslint-plugin-import": "^2.29.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.0",
