@@ -33,6 +33,10 @@ type EnemySpawn = {
 
 const PLAYER_WIDTH = 26;
 const PLAYER_HEIGHT = 34;
+const PLAYER_CROUCH_HEIGHT = 22;
+const PLAYER_OFFSET_X = 3;
+const PLAYER_OFFSET_Y = 2;
+const PLAYER_CROUCH_OFFSET_Y = PLAYER_OFFSET_Y + (PLAYER_HEIGHT - PLAYER_CROUCH_HEIGHT);
 const ENEMY_SIZE = 26;
 const MUSHROOM_SIZE = 20;
 const PLAYER_BOUNCE_VELOCITY = -160;
@@ -53,6 +57,7 @@ export abstract class WorldScene extends Phaser.Scene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private uiLayer!: Phaser.GameObjects.Layer;
   private isCrouching = false;
+  private wasCrouching = false;
   private jumpsUsed = 0;
   private wasOnGround = false;
 
@@ -85,8 +90,7 @@ export abstract class WorldScene extends Phaser.Scene {
     const playerStartY = 320;
     this.player = this.physics.add.sprite(playerStartX, playerStartY, 'player');
     this.player.setCollideWorldBounds(true);
-    this.player.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
-    this.player.setOffset(3, 2);
+    this.updatePlayerPose(false);
     this.player.setDepth(2);
 
     this.enemies = this.physics.add.group({ allowGravity: true });
@@ -155,13 +159,17 @@ export abstract class WorldScene extends Phaser.Scene {
     }
 
     this.isCrouching = this.cursors.down?.isDown === true && onGround;
+    if (this.isCrouching !== this.wasCrouching) {
+      this.updatePlayerPose(this.isCrouching);
+      this.wasCrouching = this.isCrouching;
+    }
     const scaledSpeed = baseSpeed * Math.pow(speedMultiplierBase, tripLevel);
     const moveSpeed = this.isCrouching ? scaledSpeed * crouchSpeedMultiplier : scaledSpeed;
 
-    if (!this.isCrouching && this.cursors.left?.isDown) {
+    if (this.cursors.left?.isDown) {
       this.player.setVelocityX(-moveSpeed);
       this.player.setFlipX(true);
-    } else if (!this.isCrouching && this.cursors.right?.isDown) {
+    } else if (this.cursors.right?.isDown) {
       this.player.setVelocityX(moveSpeed);
       this.player.setFlipX(false);
     } else {
@@ -226,6 +234,14 @@ export abstract class WorldScene extends Phaser.Scene {
     player.fillRect(5, 8, 6, 6);
     player.fillRect(PLAYER_WIDTH - 11, 8, 6, 6);
     player.generateTexture('player', PLAYER_WIDTH, PLAYER_HEIGHT);
+    player.clear();
+    const crouchY = PLAYER_HEIGHT - PLAYER_CROUCH_HEIGHT;
+    player.fillStyle(0x6de1ff, 1);
+    player.fillRoundedRect(0, crouchY, PLAYER_WIDTH, PLAYER_CROUCH_HEIGHT, 6);
+    player.fillStyle(0x1b1b2a, 1);
+    player.fillRect(5, crouchY + 6, 6, 6);
+    player.fillRect(PLAYER_WIDTH - 11, crouchY + 6, 6, 6);
+    player.generateTexture('player-crouch', PLAYER_WIDTH, PLAYER_HEIGHT);
     player.destroy();
 
     const goomba = this.add.graphics();
@@ -520,6 +536,18 @@ export abstract class WorldScene extends Phaser.Scene {
 
   private updateTripUI(): void {
     this.tripText.setText(`Trip Level: ${this.tripState.level}`);
+  }
+
+  private updatePlayerPose(isCrouching: boolean): void {
+    if (isCrouching) {
+      this.player.setTexture('player-crouch');
+      this.player.setSize(PLAYER_WIDTH, PLAYER_CROUCH_HEIGHT);
+      this.player.setOffset(PLAYER_OFFSET_X, PLAYER_CROUCH_OFFSET_Y);
+      return;
+    }
+    this.player.setTexture('player');
+    this.player.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
+    this.player.setOffset(PLAYER_OFFSET_X, PLAYER_OFFSET_Y);
   }
 
   private updateJumpGauge(remaining: number, total: number): void {
