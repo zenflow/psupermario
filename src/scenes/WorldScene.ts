@@ -3,26 +3,13 @@ import * as Phaser from 'phaser';
 import {
   BlockType,
   DAMAGE_COOLDOWN_MS,
-  ENEMY_SIZE,
-  ENEMY_SPEED,
-  EnemyType,
-  MUSHROOM_SIZE,
-  MUSHROOM_SPEED,
-  PLAYER_BOUNCE_VELOCITY,
-  PLAYER_HEIGHT,
-  PLAYER_JUMP_VELOCITY,
-  PLAYER_SPEED,
-  PLAYER_WIDTH,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
   TILE_SIZE,
-  TRIP_SCALE_STEP,
-  TRIP_SPEED_STEP,
-  TRIP_WOBBLE_FACTOR,
-  TRIP_ZOOM_FACTOR,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../game/constants';
+import type { EnemyType } from '../game/constants';
 import {
   applyDamage,
   applyMushroom,
@@ -43,6 +30,13 @@ type EnemySpawn = {
   type: EnemyType;
   dir: number;
 };
+
+const PLAYER_WIDTH = 26;
+const PLAYER_HEIGHT = 34;
+const ENEMY_SIZE = 26;
+const MUSHROOM_SIZE = 20;
+const PLAYER_BOUNCE_VELOCITY = -160;
+const ENEMY_SPEED = 50;
 
 export abstract class WorldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -83,7 +77,9 @@ export abstract class WorldScene extends Phaser.Scene {
     this.blocks = this.physics.add.staticGroup();
     this.buildLevel();
 
-    this.player = this.physics.add.sprite(160, 320, 'player');
+    const playerStartX = 160;
+    const playerStartY = 320;
+    this.player = this.physics.add.sprite(playerStartX, playerStartY, 'player');
     this.player.setCollideWorldBounds(true);
     this.player.setSize(PLAYER_WIDTH, PLAYER_HEIGHT);
     this.player.setOffset(3, 2);
@@ -118,7 +114,8 @@ export abstract class WorldScene extends Phaser.Scene {
     });
 
     this.setupHud();
-    this.tripText = this.addHudText(16, 16, '', {
+    const hudPadding = 16;
+    this.tripText = this.addHudText(hudPadding, hudPadding, '', {
       fontFamily: 'Trebuchet MS',
       fontSize: '18px',
       color: '#f5f3ff',
@@ -133,15 +130,20 @@ export abstract class WorldScene extends Phaser.Scene {
     const onGround = body.blocked.down;
     const tripLevel = Math.max(0, this.tripState.level);
     const maxExtraJumps = tripLevel;
+    const speedStep = 0.12;
+    const baseSpeed = 190;
+    const crouchSpeedMultiplier = 0.35;
+    const jumpVelocity = -420;
+    const fallOutOffset = 200;
 
     if (onGround && !this.wasOnGround) {
       this.jumpsUsed = 0;
     }
 
     this.isCrouching = this.cursors.down?.isDown === true && onGround;
-    const speedScale = 1 + tripLevel * TRIP_SPEED_STEP;
-    const baseSpeed = PLAYER_SPEED * speedScale;
-    const moveSpeed = this.isCrouching ? baseSpeed * 0.35 : baseSpeed;
+    const speedScale = 1 + tripLevel * speedStep;
+    const scaledSpeed = baseSpeed * speedScale;
+    const moveSpeed = this.isCrouching ? scaledSpeed * crouchSpeedMultiplier : scaledSpeed;
 
     if (!this.isCrouching && this.cursors.left?.isDown) {
       this.player.setVelocityX(-moveSpeed);
@@ -159,7 +161,7 @@ export abstract class WorldScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.cursors.up) &&
       (onGround || canMidAirJump)
     ) {
-      this.player.setVelocityY(PLAYER_JUMP_VELOCITY);
+      this.player.setVelocityY(jumpVelocity);
       this.jumpsUsed += 1;
     }
 
@@ -168,7 +170,7 @@ export abstract class WorldScene extends Phaser.Scene {
     this.applyTripVisuals(time);
     this.updateEnemyChase();
 
-    if (this.player.y > WORLD_HEIGHT + 200) {
+    if (this.player.y > WORLD_HEIGHT + fallOutOffset) {
       this.triggerGameOver('You slipped past the world edge.');
     }
   }
@@ -269,11 +271,12 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private spawnEnemies(): void {
+    const walkFrameRate = 4;
     if (!this.anims.exists('goomba-walk')) {
       this.anims.create({
         key: 'goomba-walk',
         frames: [{ key: 'goomba-1' }, { key: 'goomba-2' }],
-        frameRate: 4,
+        frameRate: walkFrameRate,
         repeat: -1,
       });
     }
@@ -281,7 +284,7 @@ export abstract class WorldScene extends Phaser.Scene {
       this.anims.create({
         key: 'koopa-walk',
         frames: [{ key: 'koopa-1' }, { key: 'koopa-2' }],
-        frameRate: 4,
+        frameRate: walkFrameRate,
         repeat: -1,
       });
     }
@@ -307,6 +310,7 @@ export abstract class WorldScene extends Phaser.Scene {
     player: Phaser.Physics.Arcade.Sprite,
     block: Phaser.Physics.Arcade.Image,
   ): void {
+    const hitCooldownMs = 140;
     const playerBody = player.body as Phaser.Physics.Arcade.Body;
     const blockBody = block.body as Phaser.Physics.Arcade.StaticBody;
     const blockData = block.getData('block') as BlockData | undefined;
@@ -324,7 +328,7 @@ export abstract class WorldScene extends Phaser.Scene {
     }
 
     const now = this.time.now;
-    if (blockData.lastHitAt !== undefined && now - blockData.lastHitAt < 140) {
+    if (blockData.lastHitAt !== undefined && now - blockData.lastHitAt < hitCooldownMs) {
       return;
     }
     blockData.lastHitAt = now;
@@ -384,9 +388,15 @@ export abstract class WorldScene extends Phaser.Scene {
     player: Phaser.Physics.Arcade.Sprite,
     enemy: Phaser.Physics.Arcade.Sprite,
   ): void {
+    const stompVelocityThreshold = 80;
+    const knockbackStrength = 160;
+    const knockbackVertical = -200;
     const playerBody = player.body as Phaser.Physics.Arcade.Body;
     const enemyBody = enemy.body as Phaser.Physics.Arcade.Body;
-    const stomp = playerBody.velocity.y > 80 && playerBody.touching.down && enemyBody.touching.up;
+    const stomp =
+      playerBody.velocity.y > stompVelocityThreshold &&
+      playerBody.touching.down &&
+      enemyBody.touching.up;
 
     if (stomp) {
       enemy.destroy();
@@ -402,8 +412,8 @@ export abstract class WorldScene extends Phaser.Scene {
     this.tripState = applyDamage(this.tripState, this.time.now);
     this.updateTripUI();
 
-    const knockback = player.x < enemy.x ? -160 : 160;
-    player.setVelocity(knockback, -200);
+    const knockback = player.x < enemy.x ? -knockbackStrength : knockbackStrength;
+    player.setVelocity(knockback, knockbackVertical);
     this.flashPlayer(player, 0xff8aa5);
 
     if (this.tripState.level < 0) {
@@ -412,10 +422,11 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private spawnMushroom(x: number, y: number): void {
+    const mushroomSpeed = 60;
     const mushroom = this.mushrooms.create(x, y, 'mushroom') as Phaser.Physics.Arcade.Sprite;
     mushroom.setBounce(1, 0);
     mushroom.setCollideWorldBounds(true);
-    mushroom.setVelocityX(MUSHROOM_SPEED);
+    mushroom.setVelocityX(mushroomSpeed);
     mushroom.setSize(MUSHROOM_SIZE, MUSHROOM_SIZE);
     this.registerWorldObject(mushroom);
   }
@@ -459,24 +470,29 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private tweenBlock(block: Phaser.Physics.Arcade.Image): void {
+    const bumpDistance = 8;
+    const bumpDurationMs = 80;
     this.tweens.add({
       targets: block,
-      y: block.y - 8,
-      duration: 80,
+      y: block.y - bumpDistance,
+      duration: bumpDurationMs,
       yoyo: true,
     });
   }
 
   private applyTripVisuals(time: number): void {
+    const tripScaleStep = 0.15;
+    const tripWobbleFactor = 0.008;
+    const tripZoomFactor = 0.024;
     const level = Math.max(0, this.tripState.level);
-    const scale = 1 + level * TRIP_SCALE_STEP;
+    const scale = 1 + level * tripScaleStep;
     this.player.setScale(scale);
 
     const camera = this.cameras.main;
-    const wobble = Math.sin(time / 240) * TRIP_WOBBLE_FACTOR * level;
-    const zoomPulse = Math.sin(time / 360) * TRIP_ZOOM_FACTOR * level;
+    const wobble = Math.sin(time / 240) * tripWobbleFactor * level;
+    const zoomPulse = Math.sin(time / 360) * tripZoomFactor * level;
     camera.setRotation(wobble);
-    camera.setZoom(1 + level * TRIP_ZOOM_FACTOR + zoomPulse);
+    camera.setZoom(1 + level * tripZoomFactor + zoomPulse);
 
     const invuln = this.time.now - this.tripState.lastDamageAt < DAMAGE_COOLDOWN_MS;
     if (invuln) {

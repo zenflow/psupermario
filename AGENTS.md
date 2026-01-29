@@ -28,7 +28,7 @@
 - `npm run lint` runs eslint and tsc
 
 ### Test
-- `npm run test` runs Vitest
+- `npm run test` runs Vitest in run mode
 
 ### Run a single test
 - Vitest: `npx vitest run path/to/file.test.ts`.
@@ -88,6 +88,11 @@
 - `PascalCase` for classes and types.
 - `SCREAMING_SNAKE_CASE` for constants that are true globals.
 - Use clear, domain-specific names (e.g., `powerupBlock`).
+
+### Constants
+- Prefer named constants for important values.
+- Scope constants to the narrowest usage: define inside a function if only used there.
+- Keep constants at module top-level only when shared across multiple functions in that module.
 
 ### Functions and classes
 - Keep functions small and single-purpose.

@@ -1,5 +1,5 @@
-import { BlockType, EnemyType, TILE_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT, WORLD_HEIGHT, WORLD_WIDTH } from '../game/constants';
 import { WorldScene } from './WorldScene';
+import { BlockType, EnemyType, TILE_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from '../game/constants';
 
 // TODO: can't all these protected methods be one? especially buildLevel and getEnemySpawns?
 export class World1Scene extends WorldScene {
