@@ -375,13 +375,12 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private handlePlayerMushroom(
-    player: Phaser.Physics.Arcade.Sprite,
+    _player: Phaser.Physics.Arcade.Sprite,
     mushroom: Phaser.Physics.Arcade.Sprite,
   ): void {
     mushroom.destroy();
     this.tripState = applyMushroom(this.tripState);
     this.updateTripUI();
-    this.flashPlayer(player, 0x96ffda);
   }
 
   private handlePlayerEnemy(
@@ -401,7 +400,6 @@ export abstract class WorldScene extends Phaser.Scene {
     if (stomp) {
       enemy.destroy();
       player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
-      this.flashPlayer(player, 0xfff6b0);
       return;
     }
 
@@ -414,7 +412,7 @@ export abstract class WorldScene extends Phaser.Scene {
 
     const knockback = player.x < enemy.x ? -knockbackStrength : knockbackStrength;
     player.setVelocity(knockback, knockbackVertical);
-    this.flashPlayer(player, 0xff8aa5);
+    this.triggerDamageFeedback();
 
     if (this.tripState.level < 0) {
       this.triggerGameOver('Trip level dropped below zero.');
@@ -507,9 +505,13 @@ export abstract class WorldScene extends Phaser.Scene {
     this.tripText.setText(`Trip Level: ${this.tripState.level}`);
   }
 
-  private flashPlayer(player: Phaser.Physics.Arcade.Sprite, tint: number): void {
-    player.setTint(tint);
-    this.time.delayedCall(180, () => player.clearTint());
+  private triggerDamageFeedback(): void {
+    const shakeDurationMs = 250;
+    const shakeIntensity = 0.08;
+    const flashDurationMs = 250;
+    const red = 255;
+    this.cameras.main.shake(shakeDurationMs, shakeIntensity);
+    this.cameras.main.flash(flashDurationMs, red, 0, 0, false);
   }
 
   private triggerGameOver(reason: string): void {
