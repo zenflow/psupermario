@@ -3,13 +3,15 @@ import * as Phaser from 'phaser';
 import {
   BlockType,
   DAMAGE_COOLDOWN_MS,
+  PLAYER_BOUNCE_VELOCITY,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
   TILE_SIZE,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../game/constants';
-import type { EnemyType } from '../game/constants';
+import { ensureEnemyAssets, getEnemyDefinition, spawnEnemy } from '../game/enemies/registry';
+import type { EnemySpawn } from '../game/enemies/types';
 import {
   applyDamage,
   applyMushroom,
@@ -24,23 +26,13 @@ type BlockData = {
   lastHitAt?: number;
 };
 
-type EnemySpawn = {
-  x: number;
-  y: number;
-  type: EnemyType;
-  dir: number;
-};
-
 const PLAYER_WIDTH = 26;
 const PLAYER_HEIGHT = 34;
 const PLAYER_CROUCH_HEIGHT = 22;
 const PLAYER_OFFSET_X = 3;
 const PLAYER_OFFSET_Y = 2;
 const PLAYER_CROUCH_OFFSET_Y = PLAYER_OFFSET_Y + (PLAYER_HEIGHT - PLAYER_CROUCH_HEIGHT);
-const ENEMY_SIZE = 26;
 const MUSHROOM_SIZE = 20;
-const PLAYER_BOUNCE_VELOCITY = -160;
-const ENEMY_SPEED = 50;
 
 export abstract class WorldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -72,6 +64,7 @@ export abstract class WorldScene extends Phaser.Scene {
   public create(): void {
     this.addBackground();
     this.createPlaceholderTextures();
+    ensureEnemyAssets(this);
 
     const keyboard = this.input.keyboard;
     if (!keyboard) {
@@ -104,20 +97,10 @@ export abstract class WorldScene extends Phaser.Scene {
       );
     });
     this.physics.add.collider(this.mushrooms, this.blocks);
-    this.physics.add.collider(this.enemies, this.blocks, (enemyObj) => {
-      this.handleEnemyBlockCollision(enemyObj as Phaser.Physics.Arcade.Sprite);
-    });
-    this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.overlap(this.player, this.mushrooms, (playerObj, itemObj) => {
       this.handlePlayerMushroom(
         playerObj as Phaser.Physics.Arcade.Sprite,
         itemObj as Phaser.Physics.Arcade.Sprite,
-      );
-    });
-    this.physics.add.overlap(this.player, this.enemies, (playerObj, enemyObj) => {
-      this.handlePlayerEnemy(
-        playerObj as Phaser.Physics.Arcade.Sprite,
-        enemyObj as Phaser.Physics.Arcade.Sprite,
       );
     });
 
@@ -143,7 +126,7 @@ export abstract class WorldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
   }
 
-  public update(time: number): void {
+  public update(time: number, delta: number): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down;
     const tripLevel = Math.max(0, this.tripState.level);
@@ -176,7 +159,7 @@ export abstract class WorldScene extends Phaser.Scene {
       this.player.setVelocityX(0);
     }
 
-    const canMidAirJump = !onGround && this.jumpsUsed > 0 && this.jumpsUsed <= maxExtraJumps;
+    const canMidAirJump = !onGround && this.jumpsUsed <= maxExtraJumps;
     if (
       this.cursors.up &&
       Phaser.Input.Keyboard.JustDown(this.cursors.up) &&
@@ -195,11 +178,62 @@ export abstract class WorldScene extends Phaser.Scene {
     this.wasOnGround = onGround;
 
     this.applyTripVisuals(time);
-    this.updateEnemyChase();
+    this.updateEnemies(time, delta);
 
     if (this.player.y > WORLD_HEIGHT + fallOutOffset) {
       this.triggerGameOver('You slipped past the world edge.');
     }
+  }
+
+  public getPlayer(): Phaser.Physics.Arcade.Sprite {
+    return this.player;
+  }
+
+  public getBlocks(): Phaser.Physics.Arcade.StaticGroup {
+    return this.blocks;
+  }
+
+  public getEnemies(): Phaser.Physics.Arcade.Group {
+    return this.enemies;
+  }
+
+  public applyPlayerDamage(now: number): boolean {
+    if (!canTakeDamage(this.tripState, now)) {
+      return false;
+    }
+
+    this.tripState = applyDamage(this.tripState, now);
+    this.updateTripUI();
+    this.triggerDamageFeedback();
+
+    if (this.tripState.level < 0) {
+      this.triggerGameOver('Trip level dropped below zero.');
+    }
+
+    return true;
+  }
+
+  private updateEnemies(time: number, delta: number): void {
+    const player = this.player;
+    this.enemies.children.iterate((enemy) => {
+      if (!enemy || !enemy.active) {
+        return null;
+      }
+      const enemyType = enemy.getData('enemyType') as EnemySpawn['type'] | undefined;
+      if (!enemyType) {
+        return null;
+      }
+      const definition = getEnemyDefinition(enemyType);
+      if (!definition?.update) {
+        return null;
+      }
+      definition.update(this, enemy as Phaser.Physics.Arcade.Sprite, {
+        player,
+        now: time,
+        delta,
+      });
+      return null;
+    });
   }
 
   private createPlaceholderTextures(): void {
@@ -244,38 +278,6 @@ export abstract class WorldScene extends Phaser.Scene {
     player.generateTexture('player-crouch', PLAYER_WIDTH, PLAYER_HEIGHT);
     player.destroy();
 
-    const goomba = this.add.graphics();
-    goomba.fillStyle(0xd77a3d, 1);
-    goomba.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
-    goomba.fillStyle(0x2f2018, 1);
-    goomba.fillRect(6, 8, 6, 6);
-    goomba.fillRect(ENEMY_SIZE - 12, 8, 6, 6);
-    goomba.generateTexture('goomba-1', ENEMY_SIZE, ENEMY_SIZE);
-    goomba.clear();
-    goomba.fillStyle(0xe0a56a, 1);
-    goomba.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
-    goomba.fillStyle(0x2f2018, 1);
-    goomba.fillRect(6, 10, 6, 6);
-    goomba.fillRect(ENEMY_SIZE - 12, 10, 6, 6);
-    goomba.generateTexture('goomba-2', ENEMY_SIZE, ENEMY_SIZE);
-    goomba.destroy();
-
-    const koopa = this.add.graphics();
-    koopa.fillStyle(0x3dbf75, 1);
-    koopa.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
-    koopa.fillStyle(0x163823, 1);
-    koopa.fillRect(6, 8, 6, 6);
-    koopa.fillRect(ENEMY_SIZE - 12, 8, 6, 6);
-    koopa.generateTexture('koopa-1', ENEMY_SIZE, ENEMY_SIZE);
-    koopa.clear();
-    koopa.fillStyle(0x54e697, 1);
-    koopa.fillRoundedRect(0, 0, ENEMY_SIZE, ENEMY_SIZE, 6);
-    koopa.fillStyle(0x163823, 1);
-    koopa.fillRect(6, 10, 6, 6);
-    koopa.fillRect(ENEMY_SIZE - 12, 10, 6, 6);
-    koopa.generateTexture('koopa-2', ENEMY_SIZE, ENEMY_SIZE);
-    koopa.destroy();
-
     const mushroom = this.add.graphics();
     mushroom.fillStyle(0xf75a6f, 1);
     mushroom.fillRoundedRect(0, 0, MUSHROOM_SIZE, MUSHROOM_SIZE, 6);
@@ -306,38 +308,9 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private spawnEnemies(): void {
-    const walkFrameRate = 4;
-    if (!this.anims.exists('goomba-walk')) {
-      this.anims.create({
-        key: 'goomba-walk',
-        frames: [{ key: 'goomba-1' }, { key: 'goomba-2' }],
-        frameRate: walkFrameRate,
-        repeat: -1,
-      });
-    }
-    if (!this.anims.exists('koopa-walk')) {
-      this.anims.create({
-        key: 'koopa-walk',
-        frames: [{ key: 'koopa-1' }, { key: 'koopa-2' }],
-        frameRate: walkFrameRate,
-        repeat: -1,
-      });
-    }
-
     const positions = this.getEnemySpawns();
     positions.forEach((enemyData) => {
-      const enemy = this.enemies.create(enemyData.x, enemyData.y, `${enemyData.type}-1`) as
-        | Phaser.Physics.Arcade.Sprite
-        | undefined;
-      if (!enemy) {
-        return;
-      }
-      enemy.setData('type', enemyData.type);
-      enemy.setCollideWorldBounds(true);
-      enemy.setBounce(1, 0);
-      enemy.setVelocityX(ENEMY_SPEED * enemyData.dir);
-      enemy.setSize(ENEMY_SIZE, ENEMY_SIZE);
-      enemy.play(`${enemyData.type}-walk`);
+      spawnEnemy(this, enemyData);
     });
   }
 
@@ -386,29 +359,6 @@ export abstract class WorldScene extends Phaser.Scene {
     this.tweenBlock(block);
   }
 
-  private handleEnemyBlockCollision(enemy: Phaser.Physics.Arcade.Sprite): void {
-    this.setEnemyVelocityTowardPlayer(enemy);
-  }
-
-  private updateEnemyChase(): void {
-    this.enemies.children.iterate((enemy) => {
-      if (!enemy || !enemy.active) {
-        return null;
-      }
-      this.setEnemyVelocityTowardPlayer(enemy as Phaser.Physics.Arcade.Sprite);
-      return null;
-    });
-  }
-
-  private setEnemyVelocityTowardPlayer(enemy: Phaser.Physics.Arcade.Sprite): void {
-    const direction = Math.sign(this.player.x - enemy.x);
-    if (direction === 0) {
-      enemy.setVelocityX(0);
-      return;
-    }
-    enemy.setVelocityX(ENEMY_SPEED * direction);
-  }
-
   private handlePlayerMushroom(
     _player: Phaser.Physics.Arcade.Sprite,
     mushroom: Phaser.Physics.Arcade.Sprite,
@@ -416,42 +366,6 @@ export abstract class WorldScene extends Phaser.Scene {
     mushroom.destroy();
     this.tripState = applyMushroom(this.tripState);
     this.updateTripUI();
-  }
-
-  private handlePlayerEnemy(
-    player: Phaser.Physics.Arcade.Sprite,
-    enemy: Phaser.Physics.Arcade.Sprite,
-  ): void {
-    const stompVelocityThreshold = 80;
-    const knockbackStrength = 160;
-    const knockbackVertical = -200;
-    const playerBody = player.body as Phaser.Physics.Arcade.Body;
-    const enemyBody = enemy.body as Phaser.Physics.Arcade.Body;
-    const stomp =
-      playerBody.velocity.y > stompVelocityThreshold &&
-      playerBody.touching.down &&
-      enemyBody.touching.up;
-
-    if (stomp) {
-      enemy.destroy();
-      player.setVelocityY(PLAYER_BOUNCE_VELOCITY);
-      return;
-    }
-
-    if (!canTakeDamage(this.tripState, this.time.now)) {
-      return;
-    }
-
-    this.tripState = applyDamage(this.tripState, this.time.now);
-    this.updateTripUI();
-
-    const knockback = player.x < enemy.x ? -knockbackStrength : knockbackStrength;
-    player.setVelocity(knockback, knockbackVertical);
-    this.triggerDamageFeedback();
-
-    if (this.tripState.level < 0) {
-      this.triggerGameOver('Trip level dropped below zero.');
-    }
   }
 
   private spawnMushroom(x: number, y: number): void {

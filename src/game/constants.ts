@@ -7,6 +7,7 @@ export const WORLD_HEIGHT = 540;
 export const TILE_SIZE = 32;
 
 export const DAMAGE_COOLDOWN_MS = 1200;
+export const PLAYER_BOUNCE_VELOCITY = -160;
 
 export enum BlockType {
   Regular = 'regular',

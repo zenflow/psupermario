@@ -1,7 +1,17 @@
 import { WorldScene } from './WorldScene';
-import { BlockType, EnemyType, TILE_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from '../game/constants';
+import {
+  BlockType,
+  EnemyType,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+  TILE_SIZE,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from '../game/constants';
+import type { EnemySpawn } from '../game/enemies/types';
 
 // TODO: can't all these protected methods be one? especially buildLevel and getEnemySpawns?
+// TODO: use same strategy for defining worlds as we used for defining enemies
 export class World1Scene extends WorldScene {
   public constructor() {
     super('World1Scene');
@@ -59,7 +69,7 @@ export class World1Scene extends WorldScene {
     this.placeBlock(2514, 420, BlockType.Powerup);
   }
 
-  protected getEnemySpawns(): Array<{ x: number; y: number; type: EnemyType; dir: number }> {
+  protected getEnemySpawns(): EnemySpawn[] {
     return [
       { x: 520, y: 420, type: EnemyType.Goomba, dir: -1 },
       { x: 980, y: 420, type: EnemyType.Koopa, dir: 1 },
