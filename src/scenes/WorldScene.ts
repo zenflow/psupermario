@@ -144,8 +144,8 @@ export abstract class WorldScene extends Phaser.Scene {
     const onGround = body.blocked.down;
     const tripLevel = Math.max(0, this.tripState.level);
     const maxExtraJumps = tripLevel;
-    const speedStep = 0.12;
     const baseSpeed = 190;
+    const speedMultiplierBase = 1.35;
     const crouchSpeedMultiplier = 0.35;
     const jumpVelocity = -420;
     const fallOutOffset = 200;
@@ -155,8 +155,7 @@ export abstract class WorldScene extends Phaser.Scene {
     }
 
     this.isCrouching = this.cursors.down?.isDown === true && onGround;
-    const speedScale = 1 + tripLevel * speedStep;
-    const scaledSpeed = baseSpeed * speedScale;
+    const scaledSpeed = baseSpeed * Math.pow(speedMultiplierBase, tripLevel);
     const moveSpeed = this.isCrouching ? scaledSpeed * crouchSpeedMultiplier : scaledSpeed;
 
     if (!this.isCrouching && this.cursors.left?.isDown) {
@@ -499,15 +498,16 @@ export abstract class WorldScene extends Phaser.Scene {
   }
 
   private applyTripVisuals(time: number): void {
-    const tripWobbleFactor = 0.008;
-    const tripZoomFactor = 0.024;
+    const tripWobbleFactor = 0.016;
+    const tripZoomFactor = 0.048;
     const level = Math.max(0, this.tripState.level);
+    const tripIntensity = Math.pow(2, level) - 1 + level;
 
     const camera = this.cameras.main;
-    const wobble = Math.sin(time / 240) * tripWobbleFactor * level;
-    const zoomPulse = Math.sin(time / 360) * tripZoomFactor * level;
+    const wobble = Math.sin(time / 240) * tripWobbleFactor * tripIntensity;
+    const zoomPulse = Math.sin(time / 360) * tripZoomFactor * tripIntensity;
     camera.setRotation(wobble);
-    camera.setZoom(1 + level * tripZoomFactor + zoomPulse);
+    camera.setZoom(1 + tripZoomFactor * tripIntensity + zoomPulse);
 
     const invuln = this.time.now - this.tripState.lastDamageAt < DAMAGE_COOLDOWN_MS;
     if (invuln) {
