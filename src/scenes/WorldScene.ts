@@ -46,6 +46,10 @@ export abstract class WorldScene extends Phaser.Scene {
   private mushrooms!: Phaser.Physics.Arcade.Group;
   private tripState!: TripState;
   private tripText!: Phaser.GameObjects.Text;
+  private jumpLabel!: Phaser.GameObjects.Text;
+  private jumpGauge!: Phaser.GameObjects.Graphics;
+  private lastJumpGaugeRemaining = -1;
+  private lastJumpGaugeTotal = -1;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private uiLayer!: Phaser.GameObjects.Layer;
   private isCrouching = false;
@@ -120,6 +124,16 @@ export abstract class WorldScene extends Phaser.Scene {
       fontSize: '18px',
       color: '#f5f3ff',
     });
+    const jumpGaugeY = hudPadding + 30;
+    this.jumpLabel = this.addHudText(hudPadding, jumpGaugeY, 'Jumps', {
+      fontFamily: 'Trebuchet MS',
+      fontSize: '14px',
+      color: '#c6c3d6',
+    });
+    this.jumpGauge = this.add.graphics();
+    this.jumpGauge.setScrollFactor(0);
+    this.uiLayer.add(this.jumpGauge);
+    this.refreshUiCameraMask();
     this.updateTripUI();
 
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -164,6 +178,12 @@ export abstract class WorldScene extends Phaser.Scene {
       this.player.setVelocityY(jumpVelocity);
       this.jumpsUsed += 1;
     }
+
+    const totalJumps = 1 + maxExtraJumps;
+    const remainingJumps = onGround
+      ? totalJumps
+      : Math.max(0, totalJumps - this.jumpsUsed);
+    this.updateJumpGauge(remainingJumps, totalJumps);
 
     this.wasOnGround = onGround;
 
@@ -503,6 +523,30 @@ export abstract class WorldScene extends Phaser.Scene {
 
   private updateTripUI(): void {
     this.tripText.setText(`Trip Level: ${this.tripState.level}`);
+  }
+
+  private updateJumpGauge(remaining: number, total: number): void {
+    if (remaining === this.lastJumpGaugeRemaining && total === this.lastJumpGaugeTotal) {
+      return;
+    }
+
+    const gaugeX = this.jumpLabel.x + 58;
+    const gaugeY = this.jumpLabel.y + 2;
+    const segmentWidth = 12;
+    const segmentHeight = 10;
+    const segmentGap = 4;
+    const radius = 2;
+
+    this.jumpGauge.clear();
+    for (let index = 0; index < total; index += 1) {
+      const isActive = index < remaining;
+      const x = gaugeX + index * (segmentWidth + segmentGap);
+      this.jumpGauge.fillStyle(isActive ? 0x79f2c0 : 0x3f3b46, 1);
+      this.jumpGauge.fillRoundedRect(x, gaugeY, segmentWidth, segmentHeight, radius);
+    }
+
+    this.lastJumpGaugeRemaining = remaining;
+    this.lastJumpGaugeTotal = total;
   }
 
   private triggerDamageFeedback(): void {
